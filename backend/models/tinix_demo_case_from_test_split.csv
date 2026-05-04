@@ -1,0 +1,2 @@
+InputSource,BestModel,province,district,ward,project_name,property_type,area,bedroom_count,bathroom_count,actual_total_price_from_test,pred_price_per_m2,Price_ML,APE_Total_%,Deviation_%,RiskFlag,ConfidenceScore_demo_from_error
+X_test representative median APE case,RandomForest,Hồ Chí Minh,Thủ Đức,Long Trường,Khu đô thị Singa city,Biệt thự/Nhà liền kề,84.0,4.0,5.0,7300000000.0,103146172.13557339,8664278459.388165,18.68874601901595,17.091639473199855,WARNING,0.813
