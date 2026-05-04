@@ -1,9 +1,31 @@
 """
-Suy luận giá BĐS: đọc tinix_valuation_model_metadata.json + pipeline joblib.
+Suy luận giá BĐS từ pipeline + metadata, căn cứ schema bộ dữ liệu gốc:
 
-Pipeline sklearn (toàn bộ bước encoding + RF) phải nhận DataFrame 1 dòng
-đúng các cột raw trong metadata (numeric_raw_cols + categorical_raw_cols),
-và trả về giá / m² (VND) — khớp cách đo trong metadata (output Price_ML = pred_ppm2 * area).
+  https://huggingface.co/datasets/tinixai/vietnam-real-estates
+
+Cột gốc trên Hugging Face (Parquet / train split) — mô tả theo dataset card:
+  • name (string): tiêu đề tin đăng (đã strip HTML, ẩn SĐT).
+  • description (string): mô tả đầy đủ (strip HTML, ẩn SĐT).
+  • property_type_name (string): loại BĐS, ví dụ «Nhà», «Căn hộ chung cư»,
+    «Đất», «Biệt thự/Nhà liền kề», «Shophouse» (5 nhóm trong viewer).
+  • province_name, district_name, ward_name, street_name (string): địa giới VN.
+  • project_name (string): tên dự án hoặc null.
+  • price (float64): giá niêm yết VND (có thể null).
+  • area (float64): diện tích sàn / đất (m²).
+  • floor_count, frontage_width, house_depth, road_width (float64): số tầng,
+    mặt tiền, chiều sâu, đường trước nhà (m); có thể null trong dữ liệu gốc.
+  • bedroom_count, bathroom_count (float64).
+  • house_direction, balcony_direction (string): hướng (Đông, Tây Nam, …) hoặc null.
+  • published_at (string): thời điểm đăng ISO 8601.
+
+Pipeline train thêm đặc trưng suy ra (không là cột tải thẳng từ HF):
+  log_area, name_len, description_len, published_year, published_month —
+  cần khớp cách notebook train đã tạo các cột này từ name/description/published_at.
+
+Form web chỉ có «địa chỉ» + vài số: ta *ước lượng* name_len/description_len từ
+chuỗi địa chỉ và dùng thời điểm hiện tại cho published_* khi không có published_at;
+đây là giới hạn của API so với đủ trường HF — khi train lại nên thống nhất
+cách điền hoặc thu thập đủ trường từ form.
 """
 
 from __future__ import annotations
@@ -33,12 +55,54 @@ def _artifact_path(meta: dict[str, Any]) -> Path:
 
 RANGE_FRACTION = float(os.environ.get("PRICE_RANGE_FRACTION", "0.08"))
 
-_PROPERTY_TYPE_TO_VI: dict[str, str] = {
-    "apartment": "Căn hộ/Chung cư",
-    "townhouse": "Nhà phố",
-    "land": "Đất nền",
-    "villa": "Biệt thự",
+# Giá trị property_type_name phải khớp chuỗi trong dataset HF (xem cột viewer).
+_PROPERTY_TYPE_TO_DATASET: dict[str, str] = {
+    "apartment": "Căn hộ chung cư",
+    "townhouse": "Nhà",  # «Nhà» = nhà riêng các loại trên card HF
+    "land": "Đất",
+    "villa": "Biệt thự/Nhà liền kề",
 }
+
+
+def _infer_province_name(text: str) -> str:
+    """Khớp tên tỉnh/thành với cột province_name trong dataset (63 địa phương)."""
+    t = (text or "").lower()
+    pairs: list[tuple[tuple[str, ...], str]] = [
+        (("hà nội", "ha noi", "hanoi", "hn "), "Hà Nội"),
+        (
+            (
+                "hồ chí minh",
+                "ho chi minh",
+                "tp.hcm",
+                " tphcm",
+                "hcm",
+                "sài gòn",
+                "sai gon",
+                "sg ",
+            ),
+            "Hồ Chí Minh",
+        ),
+        (("thủ đức", "thu duc"), "Hồ Chí Minh"),
+        (("đà nẵng", "da nang"), "Đà Nẵng"),
+        (("bình dương",), "Bình Dương"),
+        (("dĩ an", "di an"), "Bình Dương"),
+        (("đồng nai",), "Đồng Nai"),
+        (("biên hòa", "bien hoa"), "Đồng Nai"),
+        (("long an",), "Long An"),
+        (("khánh hòa", "nha trang"), "Khánh Hòa"),
+        (("hải phòng", "hai phong"), "Hải Phòng"),
+        (("hưng yên",), "Hưng Yên"),
+        (("bà rịa", "vũng tàu", "ba ria"), "Bà Rịa - Vũng Tàu"),
+        (("vĩnh long",), "Vĩnh Long"),
+        (("cần thơ", "can tho"), "Cần Thơ"),
+        (("hải dương",), "Hải Dương"),
+        (("bình chánh", "tan binh", "tân bình", "quan 1", "quận 1"), "Hồ Chí Minh"),
+        (("quốc oai", "bac tu liem", "bắc từ liêm", "cầu giấy", "nam từ liêm"), "Hà Nội"),
+    ]
+    for keys, prov in pairs:
+        if any(k in t for k in keys):
+            return prov
+    return "Hồ Chí Minh"
 
 
 def _load_meta() -> dict[str, Any]:
@@ -84,12 +148,16 @@ def parse_address_for_row(
     district_hint: str | None,
     meta: dict[str, Any],
 ) -> dict[str, str]:
-    """Tách địa chỉ text -> province / district / ward / street (heuristic)."""
+    """
+    Tách chuỗi địa chỉ người dùng -> các cột địa lý giống HF (heuristic).
+
+    Trên dataset, district_name thường là «Quận 1», «Thủ Đức», tên huyện,
+    hoặc mã số quận; không đối chiếu master hành chính.
+    """
+    _ = meta
     t = (address or "").strip()
     parts = [p.strip() for p in re.split(r"[,;]", t) if p.strip()]
-    province = "Hồ Chí Minh"
-    if any(k in t for k in ("Hà Nội", "Hanoi", "HN ")):
-        province = "Hà Nội"
+    province = _infer_province_name(t)
     district = (district_hint or "").strip() or (
         parts[-2] if len(parts) >= 2 else (parts[0] if parts else "Không rõ")
     )
@@ -103,7 +171,7 @@ def parse_address_for_row(
         "province_name": province,
         "district_name": district or "Không rõ",
         "ward_name": ward,
-        "street_name": street or t[:120],
+        "street_name": (street or t)[:200],
     }
 
 
@@ -118,9 +186,22 @@ def build_raw_frame(
     district: str | None,
     meta: dict[str, Any],
 ) -> pd.DataFrame:
+    """
+    Một dòng DataFrame đúng raw_feature_cols / tinixai schema (đã làm giàu).
+
+    Mapping từ form → HF:
+      area, bedroom_count, bathroom_count, floor_count ← nhập liệu.
+      province/district/ward/street ← parse_address_for_row (ước lượng).
+      property_type_name ← _PROPERTY_TYPE_TO_DATASET (chuỗi đúng dataset).
+      name_len / description_len ← proxy từ độ dài «địa chỉ» (không có name/description riêng).
+      published_year/month ← thời điểm gọi API (HF dùng published_at đầy đủ).
+    """
     loc = parse_address_for_row(address, district, meta)
     now = datetime.now()
     area = float(area_m2)
+    addr_stripped = (address or "").strip()
+    # Proxy: trong HF là len(name), len(description); form chỉ có một ô địa chỉ.
+    desc_proxy = f"{addr_stripped} | district_hint={district or ''}"
     row: dict[str, Any] = {
         "area": area,
         "floor_count": float(floors or 1),
@@ -130,8 +211,8 @@ def build_raw_frame(
         "bedroom_count": float(bedrooms if bedrooms is not None else 2),
         "bathroom_count": float(bathrooms if bathrooms is not None else 2),
         "log_area": float(np.log1p(area)),
-        "name_len": float(len(address)),
-        "description_len": float(len(address) + 24),
+        "name_len": float(len(addr_stripped)),
+        "description_len": float(len(desc_proxy)),
         "published_year": float(now.year),
         "published_month": float(now.month),
         "province_name": loc["province_name"],
@@ -139,8 +220,8 @@ def build_raw_frame(
         "ward_name": loc["ward_name"],
         "street_name": loc["street_name"][:200],
         "project_name": os.environ.get("TINIX_DEFAULT_PROJECT_NAME", ""),
-        "property_type_name": _PROPERTY_TYPE_TO_VI.get(
-            property_type, "Nhà phố"
+        "property_type_name": _PROPERTY_TYPE_TO_DATASET.get(
+            property_type, "Nhà"
         ),
         "house_direction": os.environ.get(
             "TINIX_DEFAULT_HOUSE_DIRECTION", "Không xác định"

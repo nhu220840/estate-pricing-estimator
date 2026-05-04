@@ -121,5 +121,5 @@
     "handover_year": null
   },
   "inference_artifact_filename": "tinix_price_prediction_pipeline.joblib",
-  "inference_notes": "Place the sklearn Pipeline saved via joblib.dump in backend/models/ using inference_artifact_filename. Pipeline must accept one DataFrame row with columns numeric_raw_cols + categorical_raw_cols and return price_per_m2 (VND); total price = pred * area unless TINIX_PRED_LOG1P_PPM2=1 for log1p outputs."
+  "inference_notes": "Place the sklearn Pipeline (joblib.dump) in backend/models/ as inference_artifact_filename. Input: one DataFrame row with numeric_raw_cols + categorical_raw_cols; output: price_per_m2 (VND), total = pred * area unless TINIX_PRED_LOG1P_PPM2=1. Columns align with Hugging Face tinixai/vietnam-real-estates (name, description, property_type_name, geo fields, price, area, dimensions, rooms, directions, published_at). The HTTP API approximates missing HF fields: property_type_name uses exact dataset strings (Căn hộ chung cư, Nhà, Đất, Biệt thự/Nhà liền kề); name_len/description_len from address text; published_year/month from request time; province from keyword match. See backend/inference.py module docstring."
 }
