@@ -26,6 +26,9 @@ export function ValuationForm({ onResult }: Props) {
   const [address, setAddress] = useState("");
   const [propertyType, setPropertyType] = useState<PropertyType>("apartment");
   const [areaM2, setAreaM2] = useState("");
+  const [bedrooms, setBedrooms] = useState("");
+  const [bathrooms, setBathrooms] = useState("");
+  const [floors, setFloors] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mockAllowed = import.meta.env.VITE_ENABLE_MOCK === "true";
@@ -48,6 +51,9 @@ export function ValuationForm({ onResult }: Props) {
       address: address.trim(),
       propertyType,
       areaM2: area,
+      bedrooms: bedrooms ? parseInt(bedrooms, 10) : undefined,
+      bathrooms: bathrooms ? parseInt(bathrooms, 10) : undefined,
+      floors: floors ? parseInt(floors, 10) : undefined,
     };
 
     setLoading(true);
@@ -140,6 +146,42 @@ export function ValuationForm({ onResult }: Props) {
             placeholder="VD: 150"
             value={areaM2}
             onChange={(e) => setAreaM2(e.target.value)}
+          />
+        </label>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <label className="block space-y-1.5">
+          <span className="text-xs font-medium text-tinix-muted">Phòng ngủ</span>
+          <input
+            type="number"
+            min={0}
+            className="rounded-xl tinix-input px-2 py-2.5 text-sm text-center w-full"
+            placeholder="-"
+            value={bedrooms}
+            onChange={(e) => setBedrooms(e.target.value)}
+          />
+        </label>
+        <label className="block space-y-1.5">
+          <span className="text-xs font-medium text-tinix-muted">WC</span>
+          <input
+            type="number"
+            min={0}
+            className="rounded-xl tinix-input px-2 py-2.5 text-sm text-center w-full"
+            placeholder="-"
+            value={bathrooms}
+            onChange={(e) => setBathrooms(e.target.value)}
+          />
+        </label>
+        <label className="block space-y-1.5">
+          <span className="text-xs font-medium text-tinix-muted">Số tầng</span>
+          <input
+            type="number"
+            min={0}
+            className="rounded-xl tinix-input px-2 py-2.5 text-sm text-center w-full"
+            placeholder="-"
+            value={floors}
+            onChange={(e) => setFloors(e.target.value)}
           />
         </label>
       </div>

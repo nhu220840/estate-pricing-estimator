@@ -57,38 +57,6 @@ export function HeroSection({ onResult, lastResult }: Props) {
         </div>
       </div>
 
-      <div
-        id="cach-hoat-dong"
-        className="relative z-10 border-t border-white/5 bg-tinix-page/90 backdrop-blur-md py-12"
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid md:grid-cols-3 gap-8 text-center">
-          {[
-            {
-              icon: "database",
-              title: "Thu thập",
-              desc: "Backend nhận payload địa chỉ, loại BĐS, diện tích…",
-            },
-            {
-              icon: "model_training",
-              title: "Model",
-              desc: "API `/api/predict` trả về giá ước tính và biên độ.",
-            },
-            {
-              icon: "dashboard",
-              title: "Hiển thị",
-              desc: "UI đồng bộ giao diện Tinix Valuation.",
-            },
-          ].map((c) => (
-            <div key={c.title} className="space-y-2">
-              <span className="material-symbols-outlined text-4xl text-primary">
-                {c.icon}
-              </span>
-              <h3 className="font-bold text-white">{c.title}</h3>
-              <p className="text-sm text-tinix-muted">{c.desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
     </section>
   );
 }
