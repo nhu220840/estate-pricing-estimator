@@ -2,13 +2,22 @@ import { FormEvent, useState } from "react";
 import { predictPrice } from "../api/predictPrice";
 import type { PredictRequest, PredictResponse, PropertyType } from "../types/prediction";
 
-/** Nhãn hiển thị khớp chuỗi `property_type_name` trong dataset (map API → HF trong backend). */
+/** Đúng 5 giá trị `property_type_name` trên HF (viewer: classes 5 values). */
 const propertyLabels: Record<PropertyType, string> = {
   apartment: "Căn hộ chung cư",
   townhouse: "Nhà",
-  land: "Đất",
   villa: "Biệt thự / nhà liền kề",
+  shophouse: "Shophouse",
+  land: "Đất",
 };
+
+const propertyOptionsOrder: PropertyType[] = [
+  "apartment",
+  "townhouse",
+  "villa",
+  "shophouse",
+  "land",
+];
 
 type Props = {
   onResult: (r: PredictResponse) => void;
@@ -119,7 +128,9 @@ export function ValuationForm({ onResult }: Props) {
             Loại BĐS <span className="text-red-400">*</span>
           </span>
           <p className="text-xs text-tinix-muted -mt-0.5 mb-1">
-            Khớp nhãn loại trong dataset (ví dụ «Nhà», không dùng từ đồng nghĩa khác trên pipeline).
+            Dataset không có thêm cột cho «Nhà mặt phố», «Đất nền trong ngõ» — các kiểu đó trong
+            dữ liệu gốc vẫn nằm trong nhóm <span className="text-white/80">Nhà</span> hoặc{" "}
+            <span className="text-white/80">Đất</span>; chọn đúng một trong 5 loại dưới đây.
           </p>
           <div className="relative">
             <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-primary text-xl z-10">
@@ -132,11 +143,9 @@ export function ValuationForm({ onResult }: Props) {
                 setPropertyType(e.target.value as PropertyType)
               }
             >
-              {(
-                Object.entries(propertyLabels) as [PropertyType, string][]
-              ).map(([k, v]) => (
+              {propertyOptionsOrder.map((k) => (
                 <option key={k} value={k} className="bg-tinix-card text-white">
-                  {v}
+                  {propertyLabels[k]}
                 </option>
               ))}
             </select>
@@ -267,9 +276,13 @@ export function ValuationForm({ onResult }: Props) {
 }
 
 function mockPredict(body: PredictRequest): PredictResponse {
-  const base =
-    body.areaM2 * (body.propertyType === "land" ? 0.045 : 0.12) +
-    (body.bedrooms ?? 2) * 0.08;
+  const ppm =
+    body.propertyType === "land"
+      ? 0.045
+      : body.propertyType === "shophouse"
+        ? 0.13
+        : 0.12;
+  const base = body.areaM2 * ppm + (body.bedrooms ?? 2) * 0.08;
   const mid = Math.round(base * 10) / 10;
   const spread = Math.max(0.3, mid * 0.08);
   return {

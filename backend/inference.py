@@ -35,7 +35,16 @@ import os
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, TypeAlias
+
+# Khớp enum API ↔ cột property_type_name (5 class trên Hugging Face viewer).
+PropertyTypeApi: TypeAlias = Literal[
+    "apartment",
+    "townhouse",
+    "land",
+    "villa",
+    "shophouse",
+]
 
 import joblib
 import numpy as np
@@ -61,6 +70,7 @@ _PROPERTY_TYPE_TO_DATASET: dict[str, str] = {
     "townhouse": "Nhà",  # «Nhà» = nhà riêng các loại trên card HF
     "land": "Đất",
     "villa": "Biệt thự/Nhà liền kề",
+    "shophouse": "Shophouse",
 }
 
 
@@ -178,7 +188,7 @@ def parse_address_for_row(
 def build_raw_frame(
     *,
     address: str,
-    property_type: Literal["apartment", "townhouse", "land", "villa"],
+    property_type: PropertyTypeApi,
     area_m2: float,
     bedrooms: int | None,
     bathrooms: int | None,
@@ -240,7 +250,7 @@ def build_raw_frame(
 
 def _heuristic_fallback_billions(
     address: str,
-    property_type: Literal["apartment", "townhouse", "land", "villa"],
+    property_type: PropertyTypeApi,
     area_m2: float,
     bedrooms: int | None,
     floors: int | None,
@@ -274,6 +284,7 @@ def _heuristic_fallback_billions(
         "townhouse": 1.1,
         "land": 0.65,
         "villa": 1.25,
+        "shophouse": 1.18,
     }[property_type]
     br = float(bedrooms if bedrooms is not None else 2)
     fl = float(floors if floors is not None else 1)
@@ -313,7 +324,7 @@ def predict_total_price_vnd(
 
 def predict_to_billions(
     address: str,
-    property_type: Literal["apartment", "townhouse", "land", "villa"],
+    property_type: PropertyTypeApi,
     area_m2: float,
     bedrooms: int | None,
     bathrooms: int | None,

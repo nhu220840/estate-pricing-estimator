@@ -1,5 +1,13 @@
-/** Payload gửi lên backend / model dự đoán giá */
-export type PropertyType = "apartment" | "townhouse" | "land" | "villa";
+/**
+ * Loại BĐS gửi qua API — backend map sang đúng `property_type_name` trên HF
+ * tinixai/vietnam-real-estates (đúng 5 giá trị trong viewer, không có loại con riêng).
+ */
+export type PropertyType =
+  | "apartment"
+  | "townhouse"
+  | "land"
+  | "villa"
+  | "shophouse";
 
 export interface PredictRequest {
   address: string;

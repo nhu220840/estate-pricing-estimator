@@ -57,7 +57,9 @@ app.add_middleware(
 
 class PredictRequest(BaseModel):
     address: str
-    propertyType: Literal["apartment", "townhouse", "land", "villa"]
+    propertyType: Literal[
+        "apartment", "townhouse", "land", "villa", "shophouse"
+    ]
     areaM2: float = Field(..., gt=0)
     bedrooms: int | None = None
     bathrooms: int | None = None
