@@ -3,31 +3,61 @@ import { Header } from "./components/Header";
 import { HeroSection } from "./components/HeroSection";
 import { SecureBootOverlay } from "./components/SecureBootOverlay";
 import type { PredictResponse } from "./types/prediction";
+import {
+  effectiveDarkMode,
+  readStoredThemePreference,
+  systemPrefersDark,
+  THEME_STORAGE_KEY,
+  type ThemePreference,
+} from "./theme";
 
 export default function App() {
-  const [dark, setDark] = useState(true);
+  const [themePref, setThemePref] = useState<ThemePreference>(() =>
+    readStoredThemePreference()
+  );
+  const [systemDark, setSystemDark] = useState(systemPrefersDark);
+  const effectiveDark = effectiveDarkMode(themePref, systemDark);
   const [bootDone, setBootDone] = useState(false);
   const [preview, setPreview] = useState<PredictResponse | null>(null);
 
   useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => setSystemDark(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(THEME_STORAGE_KEY, themePref);
+  }, [themePref]);
+
+  useEffect(() => {
     const root = document.documentElement;
-    if (dark) {
+    if (effectiveDark) {
       root.classList.add("dark");
       root.classList.remove("light");
     } else {
       root.classList.remove("dark");
       root.classList.add("light");
     }
-  }, [dark]);
+  }, [effectiveDark]);
 
   return (
     <div className="min-h-screen flex flex-col">
       {!bootDone && (
         <SecureBootOverlay onComplete={() => setBootDone(true)} />
       )}
-      <Header dark={dark} setDark={setDark} />
+      <Header
+        themePref={themePref}
+        setThemePref={setThemePref}
+        effectiveDark={effectiveDark}
+      />
       <main className="flex-1">
-        <HeroSection onResult={setPreview} lastResult={preview} />
+        <HeroSection
+          onResult={setPreview}
+          lastResult={preview}
+          effectiveDark={effectiveDark}
+        />
       </main>
       <footer className="border-t border-slate-200 dark:border-slate-800/80 bg-white dark:bg-tinix-page py-6 text-center text-xs text-slate-500 dark:text-tinix-muted">
         <p className="text-slate-600 dark:text-tinix-muted">
