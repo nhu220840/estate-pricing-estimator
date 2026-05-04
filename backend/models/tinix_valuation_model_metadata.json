@@ -120,6 +120,8 @@
     "project_class": null,
     "handover_year": null
   },
-  "inference_artifact_filename": "tinix_price_prediction_pipeline.joblib",
-  "inference_notes": "Place the sklearn Pipeline (joblib.dump) in backend/models/ as inference_artifact_filename. Input: one DataFrame row with numeric_raw_cols + categorical_raw_cols; output: price_per_m2 (VND), total = pred * area unless TINIX_PRED_LOG1P_PPM2=1. Columns align with Hugging Face tinixai/vietnam-real-estates (name, description, property_type_name, geo fields, price, area, dimensions, rooms, directions, published_at). The HTTP API approximates missing HF fields: property_type_name uses exact dataset strings (Căn hộ chung cư, Nhà, Đất, Biệt thự/Nhà liền kề); name_len/description_len from address text; published_year/month from request time; province from keyword match. See backend/inference.py module docstring."
+  "inference_artifact_filename": "best_model_global_logtarget_RandomForest.pkl",
+  "encoding_artifact_filename": "target_frequency_encoding_artifacts.pkl",
+  "inference_apply_expm1_to_pred": true,
+  "inference_notes": "Primary artifacts in backend/models/: best_model_global_logtarget_RandomForest.pkl (pipeline/model) and target_frequency_encoding_artifacts.pkl (target/frequency encoding maps). API builds raw features from form input, then maps categorical values into __te/__freq columns before pipeline.predict. Prediction is log1p(price_per_m2) so inference applies expm1 by default (can override via TINIX_PRED_LOG1P_PPM2)."
 }

@@ -1,6 +1,6 @@
 """
 API định giá BĐS — nối pipeline sklearn trong backend/models/
-(tinix_price_prediction_pipeline.joblib) + metadata tinix_valuation_model_metadata.json.
+(best_model_global_logtarget_RandomForest.pkl) + metadata tinix_valuation_model_metadata.json.
 
 Chạy (một trong hai):
   - Từ gốc repo:  uvicorn main:app --reload --port 8000
@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 try:
     from .inference import (
         artifact_path_for_status,
+        encoding_artifact_path,
         load_resources,
         predict_to_billions,
     )
@@ -31,6 +32,7 @@ except ImportError:
     # cd backend && uvicorn main:app
     from inference import (
         artifact_path_for_status,
+        encoding_artifact_path,
         load_resources,
         predict_to_billions,
     )
@@ -101,9 +103,9 @@ def predict(body: PredictRequest) -> PredictResponse:
         ) from e
 
     unit = (
-        "Đơn vị: tỷ VND (heuristic demo — thêm tinix_price_prediction_pipeline.joblib để dùng model train)"
+        "Đơn vị: tỷ VND (heuristic demo — thêm artifacts model theo metadata trong backend/models)"
         if heuristic
-        else "Đơn vị: tỷ VND (pipeline × diện tích)"
+        else "Đơn vị: tỷ VND (RandomForest pipeline × diện tích)"
     )
     return PredictResponse(
         estimatedPriceBillion=round(billions, 4),
@@ -118,8 +120,9 @@ def predict(body: PredictRequest) -> PredictResponse:
 
 @app.get("/health")
 def health():
-    _, pipeline = load_resources()
+    meta, pipeline = load_resources()
     ap = artifact_path_for_status()
+    ep = encoding_artifact_path(meta)
     strict = os.environ.get("TINIX_STRICT_MODEL", "").lower() in (
         "1",
         "true",
@@ -131,6 +134,8 @@ def health():
         "heuristic_fallback_active": pipeline is None and not strict,
         "artifact_expected": str(ap),
         "artifact_exists": ap.is_file(),
+        "encoding_artifact_expected": str(ep),
+        "encoding_artifact_exists": ep.is_file(),
         "strict_model_required": strict,
     }
 

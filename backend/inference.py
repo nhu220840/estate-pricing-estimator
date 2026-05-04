@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import os
+import pickle
 import re
 from datetime import datetime
 from pathlib import Path
@@ -52,7 +53,7 @@ import pandas as pd
 
 MODELS_DIR = Path(__file__).resolve().parent / "models"
 META_PATH = MODELS_DIR / "tinix_valuation_model_metadata.json"
-DEFAULT_ARTIFACT = "tinix_price_prediction_pipeline.joblib"
+DEFAULT_ARTIFACT = "best_model_global_logtarget_RandomForest.pkl"
 
 
 def _artifact_path(meta: dict[str, Any]) -> Path:
@@ -125,6 +126,27 @@ def _load_meta() -> dict[str, Any]:
 _meta: dict[str, Any] | None = None
 _pipeline: Any | None = None
 _artifact_resolved: Path | None = None
+_encoding_cache: dict[str, Any] | None = None
+_encoding_tried: bool = False
+
+
+def _get_encoding_artifacts(meta: dict[str, Any]) -> dict[str, Any] | None:
+    """Load TE/frequency artifacts once if present."""
+    global _encoding_cache, _encoding_tried
+    if _encoding_tried:
+        return _encoding_cache
+    _encoding_tried = True
+    filename = meta.get(
+        "encoding_artifact_filename",
+        "target_frequency_encoding_artifacts.pkl",
+    )
+    path = MODELS_DIR / filename
+    if not path.is_file():
+        _encoding_cache = None
+        return None
+    with open(path, "rb") as f:
+        _encoding_cache = pickle.load(f)
+    return _encoding_cache
 
 
 def load_resources() -> tuple[dict[str, Any], Any | None]:
@@ -141,9 +163,11 @@ def load_resources() -> tuple[dict[str, Any], Any | None]:
 
 
 def reload_model() -> Any | None:
-    """Gọi sau khi thay file .joblib."""
-    global _pipeline
+    """Gọi sau khi thay file pipeline (.joblib/.pkl)."""
+    global _pipeline, _encoding_cache, _encoding_tried
     _pipeline = None
+    _encoding_cache = None
+    _encoding_tried = False
     _, p = load_resources()
     return p
 
@@ -248,6 +272,76 @@ def build_raw_frame(
     return pd.DataFrame([{c: row[c] for c in num_cols + cat_cols}])
 
 
+def _cat_value_for_encoding(v: Any) -> str:
+    if v is None:
+        return ""
+    if isinstance(v, float) and np.isnan(v):
+        return ""
+    s = str(v).strip()
+    return s
+
+
+def _encoding_te_freq(
+    enc: dict[str, Any],
+    col: str,
+    raw_val: Any,
+) -> tuple[float, float]:
+    """
+    Lookup TE/FREQ values.
+    Unknown/missing values fallback to __MISSING__ if available, else global mean.
+    """
+    global_mean = float(enc["global_mean_log_target"])
+    mapping = enc["maps"][col]
+    te_map: dict[str, float] = mapping["te"]
+    freq_map: dict[str, float] = mapping["freq"]
+    key = _cat_value_for_encoding(raw_val)
+    if not key:
+        if "__MISSING__" in te_map:
+            return float(te_map["__MISSING__"]), float(freq_map.get("__MISSING__", 0.0))
+        return global_mean, float(freq_map.get("__MISSING__", 0.0))
+    if key in te_map:
+        return float(te_map[key]), float(freq_map.get(key, 0.0))
+    if "__MISSING__" in te_map:
+        return float(te_map["__MISSING__"]), float(freq_map.get("__MISSING__", 0.0))
+    return global_mean, 0.0
+
+
+def build_pipeline_input_df(
+    df_raw: pd.DataFrame,
+    meta: dict[str, Any],
+    enc: dict[str, Any] | None,
+) -> pd.DataFrame:
+    """
+    Build model input expected by current RF artifact:
+    12 numeric raw columns + 16 TE/FREQ encoded categorical columns.
+    """
+    if enc is None:
+        # Backward compatibility for legacy one-file pipelines accepting raw categoricals.
+        return df_raw
+
+    num_cols: list[str] = meta["numeric_raw_cols"]
+    cat_cols: list[str] = meta["categorical_raw_cols"]
+    model_cols: list[str] = meta["model_feature_cols"]
+    r0 = df_raw.iloc[0]
+    row: dict[str, Any] = {}
+
+    for c in num_cols:
+        row[c] = float(r0[c])
+    for c in cat_cols:
+        te, freq = _encoding_te_freq(enc, c, r0[c])
+        row[f"{c}__te"] = te
+        row[f"{c}__freq"] = freq
+
+    return pd.DataFrame([{c: row[c] for c in model_cols}])
+
+
+def encoding_artifact_path(meta: dict[str, Any]) -> Path:
+    return MODELS_DIR / meta.get(
+        "encoding_artifact_filename",
+        "target_frequency_encoding_artifacts.pkl",
+    )
+
+
 def _heuristic_fallback_billions(
     address: str,
     property_type: PropertyTypeApi,
@@ -256,7 +350,7 @@ def _heuristic_fallback_billions(
     floors: int | None,
 ) -> tuple[float, float, float, str]:
     """
-    Khi chưa có file .joblib: trả về mức giá theo thứ tự độ lớn (demo),
+    Khi chưa có file pipeline: trả về mức giá theo thứ tự độ lớn (demo),
     không thay thế model đã train. Bật TINIX_STRICT_MODEL=1 để tắt fallback (503).
     """
     addr = (address or "").lower()
@@ -300,7 +394,7 @@ def _heuristic_fallback_billions(
     lo = max(0.0, billions * (1.0 - RANGE_FRACTION))
     hi = billions * (1.0 + RANGE_FRACTION)
     summary = (
-        "[Heuristic — chưa có tinix_price_prediction_pipeline.joblib] "
+        "[Heuristic — chưa có file pipeline model trong backend/models] "
         f"Ước tính minh họa theo khu vực/diện tích/loại BĐS; "
         f"đặt pipeline đã train vào backend/models/ để dùng RandomForest thật."
     )
@@ -312,10 +406,18 @@ def predict_total_price_vnd(
     pipeline: Any,
     meta: dict[str, Any],
 ) -> float:
-    y = pipeline.predict(df_raw)
+    enc = _get_encoding_artifacts(meta)
+    df_in = build_pipeline_input_df(df_raw, meta, enc)
+    y = pipeline.predict(df_in)
     ppm2 = float(np.asarray(y).ravel()[0])
-    # Nếu pipeline trả log1p(price_per_m2): bật TINIX_PRED_LOG1P_PPM2=1
-    if os.environ.get("TINIX_PRED_LOG1P_PPM2", "").lower() in ("1", "true", "yes"):
+    # Default theo metadata; có thể override bằng env.
+    env = os.environ.get("TINIX_PRED_LOG1P_PPM2", "").lower()
+    apply_expm1 = (
+        env in ("1", "true", "yes")
+        if env in ("0", "1", "true", "false", "yes", "no")
+        else bool(meta.get("inference_apply_expm1_to_pred", False))
+    )
+    if apply_expm1:
         ppm2 = float(np.expm1(ppm2))
     area = float(df_raw["area"].iloc[0])
     total = ppm2 * area
@@ -333,7 +435,7 @@ def predict_to_billions(
 ) -> tuple[float, float, float, str, bool]:
     """
     Trả về (billions, lo, hi, summary, used_heuristic_fallback).
-    Nếu không có .joblib và không bật TINIX_STRICT_MODEL: dùng heuristic (demo).
+    Nếu không có artifact model và không bật TINIX_STRICT_MODEL: dùng heuristic (demo).
     """
     meta, pipeline = load_resources()
     ap = _artifact_path(meta)
