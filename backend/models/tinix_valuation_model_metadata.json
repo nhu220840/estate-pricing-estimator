@@ -8,7 +8,23 @@
   "output": "Price_ML = pred_price_per_m2 * candidate_area",
   "encoding_method": "smoothed target encoding + frequency encoding for categorical features",
   "target_encoding_smoothing": 20.0,
-  "best_model_name": "RandomForest",
+  "model_selection_metric": "Valid_price_per_m2_RMSE",
+  "model_selection_higher_is_better": false,
+  "best_model_name": "XGBoost",
+  "models_benchmarked": [
+    "XGBoost",
+    "DecisionTree",
+    "RandomForest",
+    "HistGradientBoosting",
+    "KNN_k20",
+    "GradientBoosting",
+    "ExtraTrees",
+    "Lasso",
+    "ElasticNet",
+    "Ridge",
+    "LinearRegression"
+  ],
+  "failed_models": [],
   "raw_feature_cols": [
     "area",
     "floor_count",
@@ -92,7 +108,15 @@
   "test_rows": 400517,
   "train_valid_rows": 1602064,
   "encoded_features": 28,
-  "pass_85pct_test_r2": false,
+  "final_test_price_per_m2_r2": 0.7656557977001215,
+  "final_test_price_per_m2_rmse": 57129996.85602821,
+  "final_test_price_per_m2_mae": 31564103.74357028,
+  "final_test_mape_pct": 28.995644816181343,
+  "final_test_total_price_r2": 0.634439873387936,
+  "final_test_total_price_rmse": 18393971518.908768,
+  "final_test_total_price_mae": 3976688696.2266316,
+  "pass_85pct_test_r2_price_per_m2": false,
+  "pass_85pct_test_r2_total_price": false,
   "colmap": {
     "province": "province_name",
     "district": "district_name",
@@ -120,8 +144,8 @@
     "project_class": null,
     "handover_year": null
   },
-  "inference_artifact_filename": "best_model_global_logtarget_RandomForest.pkl",
+  "inference_artifact_filename": "best_model_global_logtarget_XGBoost.pkl",
   "encoding_artifact_filename": "target_frequency_encoding_artifacts.pkl",
   "inference_apply_expm1_to_pred": true,
-  "inference_notes": "Primary artifacts in backend/models/: best_model_global_logtarget_RandomForest.pkl (pipeline/model) and target_frequency_encoding_artifacts.pkl (target/frequency encoding maps). API builds raw features from form input, then maps categorical values into __te/__freq columns before pipeline.predict. Prediction is log1p(price_per_m2) so inference applies expm1 by default (can override via TINIX_PRED_LOG1P_PPM2)."
+  "inference_notes": "Place binaries under backend/models/artifacts/: best_model_global_logtarget_XGBoost.pkl (XGBoost, log1p price/m²) and target_frequency_encoding_artifacts.pkl. CSV exports live in backend/models/csv/. Override artifact basename via env TINIX_MODEL_ARTIFACT. Requires xgboost to unpickle."
 }

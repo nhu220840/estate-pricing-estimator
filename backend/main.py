@@ -1,6 +1,7 @@
 """
-API định giá BĐS — nối pipeline sklearn trong backend/models/
-(best_model_global_logtarget_RandomForest.pkl) + metadata tinix_valuation_model_metadata.json.
+API định giá BĐS — pipeline + encoding trong backend/models/artifacts/
+(*.pkl), metadata backend/models/tinix_valuation_model_metadata.json,
+bảng benchmark/export train trong backend/models/csv/.
 
 Chạy (một trong hai):
   - Từ gốc repo:  uvicorn main:app --reload --port 8000
@@ -103,9 +104,9 @@ def predict(body: PredictRequest) -> PredictResponse:
         ) from e
 
     unit = (
-        "Đơn vị: tỷ VND (heuristic demo — thêm artifacts model theo metadata trong backend/models)"
+        "Đơn vị: tỷ VND (heuristic demo — thêm file .pkl vào backend/models/artifacts/)"
         if heuristic
-        else "Đơn vị: tỷ VND (RandomForest pipeline × diện tích)"
+        else "Đơn vị: tỷ VND (XGBoost pipeline × diện tích)"
     )
     return PredictResponse(
         estimatedPriceBillion=round(billions, 4),

@@ -1,0 +1,2 @@
+InputSource,BestModel,province,district,ward,project_name,property_type,area,bedroom_count,bathroom_count,actual_total_price_from_test,pred_price_per_m2,Price_ML,APE_Total_%,Deviation_%,RiskFlag,ConfidenceScore_demo_from_error
+X_test representative median APE case,XGBoost,Thanh Hóa,Quảng Xương,Quảng Khê,,Đất,140.0,,,1100000000.0,6545092.64409174,916312970.1728437,16.698820893377846,18.220091081535834,WARNING,0.833

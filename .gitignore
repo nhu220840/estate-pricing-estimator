@@ -31,5 +31,6 @@ venv/
 .coverage
 htmlcov/
 
-# Model artifacts ignored by default
-backend/models/*.joblib
+# Model binaries (keep repo small; copy into artifacts/ locally or in CI)
+backend/models/artifacts/*.pkl
+backend/models/artifacts/*.joblib

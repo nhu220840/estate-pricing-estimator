@@ -52,8 +52,10 @@ import numpy as np
 import pandas as pd
 
 MODELS_DIR = Path(__file__).resolve().parent / "models"
+# Binary artifacts (.pkl / .joblib) live here; CSV exports live in models/csv/.
+ARTIFACTS_DIR = MODELS_DIR / "artifacts"
 META_PATH = MODELS_DIR / "tinix_valuation_model_metadata.json"
-DEFAULT_ARTIFACT = "best_model_global_logtarget_RandomForest.pkl"
+DEFAULT_ARTIFACT = "best_model_global_logtarget_XGBoost.pkl"
 
 
 def _artifact_path(meta: dict[str, Any]) -> Path:
@@ -61,7 +63,7 @@ def _artifact_path(meta: dict[str, Any]) -> Path:
         "TINIX_MODEL_ARTIFACT",
         meta.get("inference_artifact_filename", DEFAULT_ARTIFACT),
     )
-    return MODELS_DIR / name
+    return ARTIFACTS_DIR / name
 
 RANGE_FRACTION = float(os.environ.get("PRICE_RANGE_FRACTION", "0.08"))
 
@@ -140,7 +142,7 @@ def _get_encoding_artifacts(meta: dict[str, Any]) -> dict[str, Any] | None:
         "encoding_artifact_filename",
         "target_frequency_encoding_artifacts.pkl",
     )
-    path = MODELS_DIR / filename
+    path = ARTIFACTS_DIR / filename
     if not path.is_file():
         _encoding_cache = None
         return None
@@ -312,7 +314,7 @@ def build_pipeline_input_df(
     enc: dict[str, Any] | None,
 ) -> pd.DataFrame:
     """
-    Build model input expected by current RF artifact:
+    Build model input expected by the regression artifact (XGBoost / sklearn):
     12 numeric raw columns + 16 TE/FREQ encoded categorical columns.
     """
     if enc is None:
@@ -336,7 +338,7 @@ def build_pipeline_input_df(
 
 
 def encoding_artifact_path(meta: dict[str, Any]) -> Path:
-    return MODELS_DIR / meta.get(
+    return ARTIFACTS_DIR / meta.get(
         "encoding_artifact_filename",
         "target_frequency_encoding_artifacts.pkl",
     )
@@ -394,9 +396,9 @@ def _heuristic_fallback_billions(
     lo = max(0.0, billions * (1.0 - RANGE_FRACTION))
     hi = billions * (1.0 + RANGE_FRACTION)
     summary = (
-        "[Heuristic — chưa có file pipeline model trong backend/models] "
+        "[Heuristic — chưa có file pipeline trong backend/models/artifacts/] "
         f"Ước tính minh họa theo khu vực/diện tích/loại BĐS; "
-        f"đặt pipeline đã train vào backend/models/ để dùng RandomForest thật."
+        f"đặt pipeline đã train (XGBoost) vào backend/models/artifacts/ để dùng model thật."
     )
     return billions, lo, hi, summary
 
